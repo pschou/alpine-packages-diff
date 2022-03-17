@@ -12,12 +12,11 @@ import (
 	"os"
 	"path"
 	"strconv"
+	"strings"
 )
 
 var version = "test"
 var indexFileName = "APKINDEX.tar.gz"
-
-func UNUSED(unused ...interface{}) {}
 
 type apk_info struct {
 	hash    string
@@ -32,20 +31,31 @@ func main() {
 		flag.PrintDefaults()
 	}
 
-	oldSuffix := flag.String("suffix", ".old", "Suffix used for the old Index")
-	indexRootPath := flag.String("irp", ".", "Root Path of indexes repo will be appended")
-	inRepoPath := flag.String("repo", "/latest-stable/main/x86_64", "Repo path to use in file list")
-	outputFile := flag.String("output", "-", "Output for comparison result")
+	var newFile = flag.String("new", "NEW_APKINDEX.tar.gz", "The newer APKINDEX.tar.gz file or repodata/ dir for comparison")
+	var oldFile = flag.String("old", "OLD_APKINDEX.tar.gz", "The older APKINDEX.tar.gz file or repodata/ dir for comparison")
+	var inRepoPath = flag.String("repo", "/latest-stable/main/x86_64", "Repo path to use in file list")
+	var outputFile = flag.String("output", "-", "Output file for comparison result")
+	var showNew = flag.Bool("showAdded", false, "Display packages only in the new list")
+	var showOld = flag.Bool("showRemoved", false, "Display packages only in the old list")
+	var showCommon = flag.Bool("showCommon", false, "Display packages in both the new and old lists")
 
 	flag.Parse()
 
-	apk_index := make(map[string]apk_info)
+	var new_apk_index = []apk_info{}
+	var old_apk_index = []apk_info{}
 
-	if fileExists(*indexRootPath + "/" + *inRepoPath + "/" + indexFileName + *oldSuffix) {
-		loadIndex(*indexRootPath+"/"+*inRepoPath+"/"+indexFileName+*oldSuffix, apk_index)
+	if exist, isdir := isDirectory(*newFile); exist {
+		if isdir {
+			*newFile = path.Join(*newFile, indexFileName)
+		}
+		new_apk_index = loadIndex(*newFile)
 	}
-
-	loadIndex(*indexRootPath+"/"+*inRepoPath+"/"+indexFileName, apk_index)
+	if exist, isdir := isDirectory(*oldFile); exist {
+		if isdir {
+			*oldFile = path.Join(*oldFile, indexFileName)
+		}
+		old_apk_index = loadIndex(*oldFile)
+	}
 
 	out := os.Stdout
 
@@ -54,18 +64,62 @@ func main() {
 		check(err)
 
 		defer f.Close()
-
 		out = f
 	}
 
-	for _, v := range apk_index {
-		fmt.Fprintf(out, "{apline}%s %d %s\n", v.hash, v.size, path.Join(*inRepoPath, v.name+"-"+v.version+".apk"))
+	// initialized with zeros
+	newMatched := make([]int8, len(new_apk_index))
+	oldMatched := make([]int8, len(old_apk_index))
+
+	log.Println("doing matchups")
+matchups:
+	for iNew, pNew := range new_apk_index {
+		for iOld, pOld := range old_apk_index {
+			//if reflect.DeepEqual(pNew, pOld) {
+			if pNew.hash == pOld.hash &&
+				pNew.name == pOld.name &&
+				pNew.size == pOld.size &&
+				pNew.version == pOld.version {
+				newMatched[iNew] = 1
+				oldMatched[iOld] = 1
+				continue matchups
+			}
+		}
 	}
 
-	UNUSED(oldSuffix, indexRootPath, inRepoPath, outputFile, apk_index, out)
+	fmt.Fprintln(out, "# Alpine-diff matchup, version:", version)
+	fmt.Fprintln(out, "# new:", *newFile, "old:", *oldFile)
+
+	if *showNew {
+		for iNew, v := range new_apk_index {
+			if newMatched[iNew] == 0 {
+				// This package was not seen in OLD
+				fmt.Fprintf(out, "{apline}%s %d %s\n", v.hash, v.size, path.Join(*inRepoPath, v.name+"-"+v.version+".apk"))
+			}
+		}
+	}
+
+	if *showCommon {
+		for iNew, v := range new_apk_index {
+			if newMatched[iNew] == 1 {
+				// This package was seen in BOTH
+				fmt.Fprintf(out, "{apline}%s %d %s\n", v.hash, v.size, path.Join(*inRepoPath, v.name+"-"+v.version+".apk"))
+			}
+		}
+	}
+
+	if *showOld {
+		for iOld, v := range old_apk_index {
+			if oldMatched[iOld] == 0 {
+				// This package was not seen in NEW
+				fmt.Fprintf(out, "{apline}%s %d %s\n", v.hash, v.size, path.Join(*inRepoPath, v.name+"-"+v.version+".apk"))
+			}
+		}
+	}
 }
 
-func loadIndex(indexPath string, apk_index map[string]apk_info) {
+func loadIndex(indexPath string) (apk_index []apk_info) {
+	apk_index = []apk_info{}
 	fd, err := os.Open(indexPath)
 	check(err)
 
@@ -123,60 +177,35 @@ func loadIndex(indexPath string, apk_index map[string]apk_info) {
 			}
 
 			indexData.Scan()
-			line = indexData.Text()
+			line = strings.TrimSpace(indexData.Text())
 		}
 
-		if val, ok := apk_index[pkgInfo.name]; ok {
-			if val.hash == pkgInfo.hash {
-				delete(apk_index, pkgInfo.name)
+		apk_index = append(apk_index, pkgInfo)
 
-				continue
-			}
-		}
-
-		apk_index[pkgInfo.name] = pkgInfo
 	}
 
-	fmt.Printf("Len %d\n", len(apk_index))
+	return
 }
 
 func split_on_gzip_header(data []byte) ([]byte, []byte) {
 	gzip_header := []byte{0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00}
-	arr := []byte(gzip_header)
+	//arr := []byte(gzip_header)
 
-	pos := int64(len(gzip_header))
-
-	has_sig := false
-	for !has_sig {
-		if !(bytes.Equal(data[pos:pos+int64(len(gzip_header))], gzip_header)) {
-			arr = append(arr, data[pos])
-
-			pos += 1
-		} else {
-			has_sig = true
-		}
+	pos := bytes.Index(data[1:], gzip_header) + 1
+	if pos < 1 {
+		return []byte{}, data
 	}
-
-	sig := data[:pos]
-	content := data[pos:]
-
-	return sig, content
+	return data[:pos], data[pos:]
 }
 
 // isDirectory determines if a file represented
 // by `path` is a directory or not
-func isDirectory(path string) bool {
+func isDirectory(path string) (exist bool, isdir bool) {
 	fileInfo, err := os.Stat(path)
 	if err != nil {
-		return false
+		return false, false
 	}
-	return fileInfo.IsDir()
-}
-
-func fileExists(path string) bool {
-	_, err := os.Stat(path)
-
-	return err == nil
+	return true, fileInfo.IsDir()
 }
 
 func check(e error) {
