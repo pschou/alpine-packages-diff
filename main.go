@@ -94,7 +94,7 @@ matchups:
 		for iNew, v := range new_apk_index {
 			if newMatched[iNew] == 0 {
 				// This package was not seen in OLD
-				fmt.Fprintf(out, "{apline}%s %d %s\n", v.hash, v.size, path.Join(*inRepoPath, v.name+"-"+v.version+".apk"))
+				fmt.Fprintf(out, "{alpine}%s %d %s\n", v.hash, v.size, path.Join(*inRepoPath, v.name+"-"+v.version+".apk"))
 			}
 		}
 	}
@@ -103,7 +103,7 @@ matchups:
 		for iNew, v := range new_apk_index {
 			if newMatched[iNew] == 1 {
 				// This package was seen in BOTH
-				fmt.Fprintf(out, "{apline}%s %d %s\n", v.hash, v.size, path.Join(*inRepoPath, v.name+"-"+v.version+".apk"))
+				fmt.Fprintf(out, "{alpine}%s %d %s\n", v.hash, v.size, path.Join(*inRepoPath, v.name+"-"+v.version+".apk"))
 			}
 		}
 	}
@@ -112,7 +112,7 @@ matchups:
 		for iOld, v := range old_apk_index {
 			if oldMatched[iOld] == 0 {
 				// This package was not seen in NEW
-				fmt.Fprintf(out, "{apline}%s %d %s\n", v.hash, v.size, path.Join(*inRepoPath, v.name+"-"+v.version+".apk"))
+				fmt.Fprintf(out, "{alpine}%s %d %s\n", v.hash, v.size, path.Join(*inRepoPath, v.name+"-"+v.version+".apk"))
 			}
 		}
 	}
