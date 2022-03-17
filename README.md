@@ -4,12 +4,17 @@ This tool detects the differences between two Alpine APKINDEX files and prints o
 
 ## Examples
 
-To show what was added
+Using two APKINDEX.tar.gz files
 ```bash
 $ ./alpine-package-diff -new NEW_APKINDEX.tar.gz -old OLD_APKINDEX.tar.gz -showAdded
 ```
 
-To show all packages
+Using one repo directory and one file
+```bash
+./yum-package-diff -new output/ -old OLD_APKINDEX.tar.gz -showAdded -output filelist.txt
+```
+
+Using just a new file, this gives you a full list
 ```bash
 $ ./alpine-package-diff -new NEW_APKINDEX.tar.gz -old "" -showAdded
 ```

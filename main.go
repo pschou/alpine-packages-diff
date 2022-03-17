@@ -44,13 +44,13 @@ func main() {
 	var new_apk_index = []apk_info{}
 	var old_apk_index = []apk_info{}
 
-	if exist, isdir := isDirectory(*newFile); exist {
+	if _, isdir := isDirectory(*newFile); *newFile != "" {
 		if isdir {
 			*newFile = path.Join(*newFile, indexFileName)
 		}
 		new_apk_index = loadIndex(*newFile)
 	}
-	if exist, isdir := isDirectory(*oldFile); exist {
+	if _, isdir := isDirectory(*oldFile); *oldFile != "" {
 		if isdir {
 			*oldFile = path.Join(*oldFile, indexFileName)
 		}
