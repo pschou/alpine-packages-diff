@@ -7,6 +7,7 @@ import (
 	"compress/gzip"
 	"flag"
 	"fmt"
+	humanize "github.com/dustin/go-humanize"
 	"io/ioutil"
 	"log"
 	"os"
@@ -89,6 +90,31 @@ matchups:
 
 	fmt.Fprintln(out, "# Alpine-diff matchup, version:", version)
 	fmt.Fprintln(out, "# new:", *newFile, "old:", *oldFile)
+
+	var totalSize uint64
+	if *showNew {
+		for iNew, v := range new_apk_index {
+			if newMatched[iNew] == 0 {
+				totalSize += uint64(v.size)
+			}
+		}
+	}
+	if *showCommon {
+		for iNew, v := range new_apk_index {
+			if newMatched[iNew] == 1 {
+				totalSize += uint64(v.size)
+			}
+		}
+	}
+	if *showOld {
+		for iOld, v := range old_apk_index {
+			if oldMatched[iOld] == 0 {
+				totalSize += uint64(v.size)
+			}
+		}
+	}
+
+	fmt.Fprintln(out, "# filelist size:", humanize.Bytes(totalSize))
 
 	if *showNew {
 		for iNew, v := range new_apk_index {
